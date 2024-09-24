@@ -52,8 +52,8 @@ variables:
   check_unknown: !input check_unknown
   battery_warning_level: !input battery_warning_level
   trigger_interval_hours: !input trigger_interval_hours
-  non_critical_entities: ['update', 'firmware', 'sensor.update', 'sensor.firmware']
-  ignore_unknown_entities: ['button', 'select', 'person']
+  non_critical_entities: ['update', 'firmware', 'automation']
+  ignore_unknown_entities: ['button', 'select', 'person', 'stt']
   items: >
     {% set entities = namespace(data=[]) %}
 
@@ -72,8 +72,7 @@ variables:
         {% set entities.data = entities.data + [{
           'entity_id': state.entity_id,
           'device_id': (device_id(state.entity_id) or 'no_device'),
-          'device_name': (device_attr(state.entity_id, 'name') or 'no_device'),
-          'friendly_name': (device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name') or state_attr(state.entity_id, 'friendly_name') or 'unknown'),
+          'device_name': (device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name') or state_attr(state.entity_id, 'friendly_name') or 'unknown'),
           'area_id': (area_id(state.entity_id) or 'no_area'),
           'entity_name': (state_attr(state.entity_id, 'friendly_name') or state.name or 'unknown'),
           'state': state.state
@@ -95,8 +94,7 @@ variables:
           {% set entities.data = entities.data + [{
             'entity_id': state.entity_id,
             'device_id': (device_id(state.entity_id) or 'no_device'),
-            'device_name': (device_attr(state.entity_id, 'name') or 'no_device'),
-            'friendly_name': (device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name') or state_attr(state.entity_id, 'friendly_name') or 'unknown'),
+            'device_name': (device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name') or state_attr(state.entity_id, 'friendly_name') or 'unknown'),
             'area_id': (area_id(state.entity_id) or 'no_area'),
             'entity_name': (state_attr(state.entity_id, 'friendly_name') or state.name or 'unknown'),
             'state': 'low battery'
@@ -118,8 +116,7 @@ variables:
             {% set entities.data = entities.data + [{
               'entity_id': state.entity_id,
               'device_id': (device_id(state.entity_id) or 'no_device'),
-              'device_name': (device_attr(state.entity_id, 'name') or 'no_device'),
-              'friendly_name': (device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name') or state_attr(state.entity_id, 'friendly_name') or 'unknown'),
+              'device_name': (device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name') or state_attr(state.entity_id, 'friendly_name') or 'unknown'),
               'area_id': (area_id(state.entity_id) or 'no_area'),
               'entity_name': (state_attr(state.entity_id, 'friendly_name') or state.name or 'unknown'),
               'state': 'low battery'
