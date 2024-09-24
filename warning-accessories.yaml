@@ -51,6 +51,7 @@ blueprint:
       selector:
         action:
 variables:
+  trigger_interval: !input trigger_interval
   check_battery: !input check_battery
   battery_warning_level: !input battery_warning_level
   exclude: !input exclude
