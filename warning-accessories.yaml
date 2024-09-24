@@ -140,12 +140,8 @@ condition:
     value_template: "{{ (now().hour | int) % (trigger_interval_hours | int) == 0 }}"
 
 action:
-  - service: http.request
+  - service: rest_command.send_device_status
     data:
-      url: "http://10.0.0.23:4000/webhooks/hass"  # Replace with your server endpoint
-      method: POST
-      headers:
-        Content-Type: application/json
       payload: "{{ {'items': items} | tojson }}"
 
 mode: single
