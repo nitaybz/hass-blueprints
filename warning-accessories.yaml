@@ -1,3 +1,50 @@
+blueprint:
+  name: Device Availability and Battery Hourly Checker
+  description: |
+    Checks all entities/devices for availability (unavailable and optionally unknown states), and all entities/devices
+    with the 'battery' device_class for battery level.
+
+    Devices/entities that are not assigned to an area, 
+    or are assigned to areas where the name begins with an underscore (_), 
+    or are explicitly excluded, will not be monitored.
+    To monitor devices that are not fixed to a specific area, simply create a pseudo-area, such as "Roaming" or "Nowhere" and add the devices to that area.
+  domain: automation
+  source_url: https://raw.githubusercontent.com/briped/homeassistant/master/blueprints/device_availability_checker.yaml
+  input:
+    check_battery:
+      name: Check Battery Levels?
+      description: Enable to monitor devices with battery level below the configured value.
+      default: true
+      selector:
+        boolean:
+    battery_warning_level:
+      name: Battery warning level
+      description: Devices with battery level below the configured value are assumed to be low-battery (as well as binary battery sensors with value 'on').
+      default: 20
+      selector:
+        number:
+          min: 5.0
+          max: 100.0
+          unit_of_measurement: "%"
+          mode: slider
+          step: 5.0
+    check_unknown:
+      name: Check Unknown States?
+      description: Enable to monitor devices with state 'unknown'.
+      default: false
+      selector:
+        boolean:
+    exclude:
+      name: Exclusions
+      description: Areas/devices/entities to exclude from monitoring.
+      default: []
+      selector:
+        target:
+    actions:
+      name: Actions
+      description: Actions to run, such as notifications. Matched devices are returned with the <code>{{items}}</code> dictionary.
+      selector:
+        action:
 variables:
   check_battery: !input check_battery
   check_unknown: !input check_unknown
@@ -6,7 +53,7 @@ variables:
   non_critical_entities: ['update', 'firmware', 'sensor.update', 'sensor.firmware'] 
   items: >
     {% set devices = {} %}
-
+    
     {% for state in states if state.state in ['unavailable'] or (check_unknown and state.state == 'unknown') %}
       {% set add_entity = true %}
       {% if area_id(state.entity_id) == None or area_name(state.entity_id)[0:1] == '_' %}
@@ -20,6 +67,7 @@ variables:
           {% set add_entity = false %}
         {% endif %}
       {% endif %}
+      {# Exclude non-critical entities and button entities #}
       {% if state.entity_id.split('.')[0] in non_critical_entities or state.entity_id.split('.')[0] == 'button' %}
         {% set add_entity = false %}
       {% endif %}
@@ -27,15 +75,13 @@ variables:
       {% if add_entity == true %}
         {% set device_id = device_id(state.entity_id) %}
         {% set entity_info = {'entity_id': state.entity_id, 'entity_name': state_attr(state.entity_id, 'friendly_name') or state.name, 'state': state.state} %}
-
-        {# Initialize the device object if not already created #}
+        
         {% if device_id not in devices %}
-          {% set devices = devices | merge({device_id: {'device_name': device_attr(state.entity_id, 'name'), 'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name'), 'area_id': area_id(state.entity_id), 'affected_entities': []}}) %}
+          {% set devices = devices | merge({device_id: {'device_name': device_attr(state.entity_id, 'name'), 'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name'), 'area_id': area_id(state.entity_id), 'affected_entities': [entity_info]}}) %}
+        {% else %}
+          {% set updated_device = devices[device_id] | merge({'affected_entities': devices[device_id]['affected_entities'] + [entity_info]}) %}
+          {% set devices = devices | merge({device_id: updated_device}) %}
         {% endif %}
-
-        {# Add the entity information to the affected_entities list #}
-        {% set devices[device_id]['affected_entities'] = devices[device_id]['affected_entities'] | list %}
-        {% set devices[device_id]['affected_entities'] = devices[device_id]['affected_entities'] + [entity_info] %}
       {% endif %}
     {% endfor %}
 
@@ -58,15 +104,13 @@ variables:
         {% if add_entity == true %}
           {% set device_id = device_id(state.entity_id) %}
           {% set entity_info = {'entity_id': state.entity_id, 'entity_name': state_attr(state.entity_id, 'friendly_name') or state.name, 'state': 'low battery'} %}
-
-          {# Initialize the device object if not already created #}
+          
           {% if device_id not in devices %}
-            {% set devices = devices | merge({device_id: {'device_name': device_attr(state.entity_id, 'name'), 'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name'), 'area_id': area_id(state.entity_id), 'affected_entities': []}}) %}
+            {% set devices = devices | merge({device_id: {'device_name': device_attr(state.entity_id, 'name'), 'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name'), 'area_id': area_id(state.entity_id), 'affected_entities': [entity_info]}}) %}
+          {% else %}
+            {% set updated_device = devices[device_id] | merge({'affected_entities': devices[device_id]['affected_entities'] + [entity_info]}) %}
+            {% set devices = devices | merge({device_id: updated_device}) %}
           {% endif %}
-
-          {# Add the entity information to the affected_entities list #}
-          {% set devices[device_id]['affected_entities'] = devices[device_id]['affected_entities'] | list %}
-          {% set devices[device_id]['affected_entities'] = devices[device_id]['affected_entities'] + [entity_info] %}
         {% endif %}
       {% endfor %}
 
@@ -90,17 +134,23 @@ variables:
         {% if add_entity == true %}
           {% set device_id = device_id(state.entity_id) %}
           {% set entity_info = {'entity_id': state.entity_id, 'entity_name': state_attr(state.entity_id, 'friendly_name') or state.name, 'state': 'low battery'} %}
-
-          {# Initialize the device object if not already created #}
+          
           {% if device_id not in devices %}
-            {% set devices = devices | merge({device_id: {'device_name': device_attr(state.entity_id, 'name'), 'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name'), 'area_id': area_id(state.entity_id), 'affected_entities': []}}) %}
+            {% set devices = devices | merge({device_id: {'device_name': device_attr(state.entity_id, 'name'), 'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name'), 'area_id': area_id(state.entity_id), 'affected_entities': [entity_info]}}) %}
+          {% else %}
+            {% set updated_device = devices[device_id] | merge({'affected_entities': devices[device_id]['affected_entities'] + [entity_info]}) %}
+            {% set devices = devices | merge({device_id: updated_device}) %}
           {% endif %}
-
-          {# Add the entity information to the affected_entities list #}
-          {% set devices[device_id]['affected_entities'] = devices[device_id]['affected_entities'] | list %}
-          {% set devices[device_id]['affected_entities'] = devices[device_id]['affected_entities'] + [entity_info] %}
         {% endif %}
       {% endfor %}
     {% endif %}
 
     {{ devices | tojson }}
+trigger:
+  - platform: time_pattern
+    minutes: "0"
+condition: []
+action:
+  - choose: []
+    default: !input actions
+mode: single
