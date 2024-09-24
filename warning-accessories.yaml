@@ -54,7 +54,6 @@ variables:
   items: >
     {% set devices = namespace(data={}) %}
 
-    {# Loop through all entities with state == unavailable or, optionally, unknown. #}
     {% for state in states if state.state in ['unavailable'] or (check_unknown and state.state == 'unknown') %}
       {% set add_entity = true %}
       {% if area_id(state.entity_id) == None or area_name(state.entity_id)[0:1] == '_' %}
@@ -76,10 +75,11 @@ variables:
       {% if add_entity == true %}
         {% set device_id = device_id(state.entity_id) %}
         {% set entity_info = {'entity_id': state.entity_id, 'entity_name': state_attr(state.entity_id, 'friendly_name') or state.name, 'state': state.state} %}
+        
         {% if device_id in devices.data %}
           {% set devices.data[device_id]['affected_entities'] = devices.data[device_id]['affected_entities'] + [entity_info] %}
         {% else %}
-          {% set devices.data = devices.data | merge({device_id: {'device_name': device_attr(state.entity_id, 'name'), 'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name'), 'area_id': area_id(state.entity_id), 'affected_entities': [entity_info]}}) %}
+          {% set devices.data = devices.data | merge({(device_id): {'device_name': device_attr(state.entity_id, 'name'), 'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name'), 'area_id': area_id(state.entity_id), 'affected_entities': [entity_info]}}) %}
         {% endif %}
       {% endif %}
     {% endfor %}
@@ -103,10 +103,11 @@ variables:
         {% if add_entity == true %}
           {% set device_id = device_id(state.entity_id) %}
           {% set entity_info = {'entity_id': state.entity_id, 'entity_name': state_attr(state.entity_id, 'friendly_name') or state.name, 'state': 'low battery'} %}
+          
           {% if device_id in devices.data %}
             {% set devices.data[device_id]['affected_entities'] = devices.data[device_id]['affected_entities'] + [entity_info] %}
           {% else %}
-            {% set devices.data = devices.data | merge({device_id: {'device_name': device_attr(state.entity_id, 'name'), 'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name'), 'area_id': area_id(state.entity_id), 'affected_entities': [entity_info]}}) %}
+            {% set devices.data = devices.data | merge({(device_id): {'device_name': device_attr(state.entity_id, 'name'), 'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name'), 'area_id': area_id(state.entity_id), 'affected_entities': [entity_info]}}) %}
           {% endif %}
         {% endif %}
       {% endfor %}
@@ -131,10 +132,11 @@ variables:
         {% if add_entity == true %}
           {% set device_id = device_id(state.entity_id) %}
           {% set entity_info = {'entity_id': state.entity_id, 'entity_name': state_attr(state.entity_id, 'friendly_name') or state.name, 'state': 'low battery'} %}
+          
           {% if device_id in devices.data %}
             {% set devices.data[device_id]['affected_entities'] = devices.data[device_id]['affected_entities'] + [entity_info] %}
           {% else %}
-            {% set devices.data = devices.data | merge({device_id: {'device_name': device_attr(state.entity_id, 'name'), 'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name'), 'area_id': area_id(state.entity_id), 'affected_entities': [entity_info]}}) %}
+            {% set devices.data = devices.data | merge({(device_id): {'device_name': device_attr(state.entity_id, 'name'), 'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name'), 'area_id': area_id(state.entity_id), 'affected_entities': [entity_info]}}) %}
           {% endif %}
         {% endif %}
       {% endfor %}
