@@ -42,7 +42,7 @@ blueprint:
         target:
     actions:
       name: Actions
-      description: Actions to run, such as notifications. Matched devices are returned with the <code>{{items}}</code> dictionary.
+      description: Actions to run, such as notifications. Matched devices are returned with the <code>{{ items }}</code> dictionary.
       selector:
         action:
 variables:
@@ -50,18 +50,19 @@ variables:
   check_unknown: !input check_unknown
   battery_warning_level: !input battery_warning_level
   exclude: !input exclude
-  # Add non-critical entities list
   non_critical_entities: ['update', 'firmware', 'sensor.update', 'sensor.firmware'] 
+  ignore_unknown_entities: ['button', 'select']
   items: >
-    {% set entities = namespace(data=[]) %}
-    {% set devices = namespace(data=[]) %}
+    {% set devices = {} %}
 
-    {# Loop through all entities with state == unavailable or, optionally, unknown. #}
-    {% for state in states if state.state in ['unavailable'] or (check_unknown and state.state == 'unknown') %}
+    {# Loop through entities that are unavailable or unknown (if enabled) #}
+    {% for state in states if state.state == 'unavailable' or (check_unknown and state.state == 'unknown') %}
       {% set add_entity = true %}
+      {# Exclude entities without area or with area name starting with '_' #}
       {% if area_id(state.entity_id) == None or area_name(state.entity_id)[0:1] == '_' %}
         {% set add_entity = false %}
       {% endif %}
+      {# Exclude entities specified in the exclude input #}
       {% if exclude is defined %}
         {% if exclude.entity_id is defined and state.entity_id in exclude.entity_id %}
           {% set add_entity = false %}
@@ -70,18 +71,32 @@ variables:
           {% set add_entity = false %}
         {% endif %}
       {% endif %}
-      {# Exclude non-critical entities and button entities #}
-      {% if state.entity_id.split('.')[0] in non_critical_entities or state.entity_id.split('.')[0] == 'button' %}
+      {# Exclude non-critical entities and specified domains #}
+      {% if state.entity_id.split('.')[0] in non_critical_entities or (state.state == 'unknown' and state.entity_id.split('.')[0] in ignore_unknown_entities) %}
         {% set add_entity = false %}
       {% endif %}
 
-      {% if add_entity == true %}
-        {% set entities.data = entities.data + [{'entity_id': state.entity_id, 'device_id': device_id(state.entity_id), 'area_id': area_id(state.entity_id), 'state': state.state, 'entity_name': state.name if state_attr(state.entity_id, 'friendly_name') is none else state_attr(state.entity_id, 'friendly_name') }] %}
+      {% if add_entity %}
+        {% set device_id = device_id(state.entity_id) %}
+        {% set entity_info = {
+          'entity_id': state.entity_id,
+          'entity_name': state_attr(state.entity_id, 'friendly_name') or state.name,
+          'state': state.state
+        } %}
+        {% set device = devices.get(device_id, {
+          'device_name': device_attr(state.entity_id, 'name'),
+          'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name'),
+          'area_id': area_id(state.entity_id),
+          'affected_entities': []
+        }) %}
+        {% set device = device | combine({'affected_entities': device['affected_entities'] + [entity_info]}) %}
+        {% set devices = devices | combine({device_id: device}) %}
       {% endif %}
     {% endfor %}
 
-    {# Check battery states if enabled #}
+    {# Check battery levels if enabled #}
     {% if check_battery %}
+      {# Check binary sensors with device_class 'battery' and state 'on' #}
       {% for state in states.binary_sensor | rejectattr('attributes.device_class', 'undefined') | selectattr('attributes.device_class', 'eq', 'battery') | selectattr('state', 'eq', 'on') %}
         {% set add_entity = true %}
         {% if area_id(state.entity_id) == None or area_name(state.entity_id)[0:1] == '_' %}
@@ -96,11 +111,25 @@ variables:
           {% endif %}
         {% endif %}
 
-        {% if add_entity == true %}
-          {% set entities.data = entities.data + [{'entity_id': state.entity_id, 'device_id': device_id(state.entity_id), 'area_id': area_id(state.entity_id), 'state': 'low battery', 'entity_name': state.name if state_attr(state.entity_id, 'friendly_name') is none else state_attr(state.entity_id, 'friendly_name') }] %}
+        {% if add_entity %}
+          {% set device_id = device_id(state.entity_id) %}
+          {% set entity_info = {
+            'entity_id': state.entity_id,
+            'entity_name': state_attr(state.entity_id, 'friendly_name') or state.name,
+            'state': 'low battery'
+          } %}
+          {% set device = devices.get(device_id, {
+            'device_name': device_attr(state.entity_id, 'name'),
+            'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name'),
+            'area_id': area_id(state.entity_id),
+            'affected_entities': []
+          }) %}
+          {% set device = device | combine({'affected_entities': device['affected_entities'] + [entity_info]}) %}
+          {% set devices = devices | combine({device_id: device}) %}
         {% endif %}
       {% endfor %}
 
+      {# Check sensors with device_class 'battery' and low battery level #}
       {% for state in states.sensor | rejectattr('state', 'eq', 'unavailable') | rejectattr('attributes.device_class', 'undefined') | selectattr('attributes.device_class', 'eq', 'battery') %}
         {% set add_entity = true %}
         {% if area_id(state.entity_id) == None or area_name(state.entity_id)[0:1] == '_' %}
@@ -118,42 +147,26 @@ variables:
           {% set add_entity = false %}
         {% endif %}
 
-        {% if add_entity == true %}
-          {% set entities.data = entities.data + [{'entity_id': state.entity_id, 'device_id': device_id(state.entity_id), 'area_id': area_id(state.entity_id), 'state': 'low battery', 'entity_name': state.name if state_attr(state.entity_id, 'friendly_name') is none else state_attr(state.entity_id, 'friendly_name') }] %}
+        {% if add_entity %}
+          {% set device_id = device_id(state.entity_id) %}
+          {% set entity_info = {
+            'entity_id': state.entity_id,
+            'entity_name': state_attr(state.entity_id, 'friendly_name') or state.name,
+            'state': 'low battery'
+          } %}
+          {% set device = devices.get(device_id, {
+            'device_name': device_attr(state.entity_id, 'name'),
+            'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name'),
+            'area_id': area_id(state.entity_id),
+            'affected_entities': []
+          }) %}
+          {% set device = device | combine({'affected_entities': device['affected_entities'] + [entity_info]}) %}
+          {% set devices = devices | combine({device_id: device}) %}
         {% endif %}
       {% endfor %}
     {% endif %}
 
-    {# Loop through all unique devices from the entities array. #}
-    {% for entity in entities.data | unique(attribute='device_id') %}
-      {% set add_entity = true %}
-      {% if area_id(entity.device_id) == None or area_name(entity.device_id)[0:1] == '_' %}
-        {% set add_entity = false %}
-      {% endif %}
-      {% if exclude is defined %}
-        {% if exclude.device_id is defined and entity.device_id in exclude.device_id %}
-          {% set add_entity = false %}
-        {% endif %}
-        {% if exclude.area_id is defined and area_id(entity.device_id) in exclude.area_id %}
-          {% set add_entity = false %}
-        {% endif %}
-      {% endif %}
-      {% if check_battery is defined and (entity.state | int(-1)) >= (battery_warning_level | int(0)) %}
-        {% set add_entity = false %}
-      {% endif %}
-
-      {% if add_entity == true %}
-        {% set device_friendly_name = device_attr(entity.device_id, 'name') %}
-        {% if state_attr(entity.entity_id, 'friendly_name') %}
-          {% set device_friendly_name = state_attr(entity.entity_id, 'friendly_name') %}
-        {% endif %}
-        {% if device_attr(entity.device_id, 'name_by_user') %}
-          {% set device_friendly_name = device_attr(entity.device_id, 'name_by_user') %}
-        {% endif %}
-        {% set devices.data = devices.data + [{'device_id': entity.device_id, 'device_name': device_attr(entity.entity_id, 'name'), 'friendly_name': device_friendly_name, 'area_id': area_id(entity.entity_id), 'state': entity.state, 'entity_name': entity.entity_id }] %}
-      {% endif %}
-    {% endfor %}
-    {{ devices.data }}
+    {{ devices.values() | list | tojson }}
 trigger:
   - platform: time_pattern
     minutes: "0"
