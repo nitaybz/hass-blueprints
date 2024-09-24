@@ -53,7 +53,7 @@ variables:
   battery_warning_level: !input battery_warning_level
   trigger_interval_hours: !input trigger_interval_hours
   non_critical_entities: ['update', 'firmware', 'sensor.update', 'sensor.firmware']
-  ignore_unknown_entities: ['button', 'select']
+  ignore_unknown_entities: ['button', 'select', 'person']
   items: >
     {% set entities = namespace(data=[]) %}
 
