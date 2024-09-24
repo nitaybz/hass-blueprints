@@ -71,11 +71,11 @@ variables:
       {% if add_entity %}
         {% set entities.data = entities.data + [{
           'entity_id': state.entity_id,
-          'device_id': device_id(state.entity_id) or 'no_device_id',
-          'device_name': device_attr(state.entity_id, 'name') or '',
-          'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name') or '',
-          'area_id': area_id(state.entity_id) or '',
-          'entity_name': state_attr(state.entity_id, 'friendly_name') or state.name or '',
+          'device_id': (device_id(state.entity_id) or 'no_device'),
+          'device_name': (device_attr(state.entity_id, 'name') or 'no_device'),
+          'friendly_name': (device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name') or state_attr(state.entity_id, 'friendly_name') or 'unknown'),
+          'area_id': (area_id(state.entity_id) or 'no_area'),
+          'entity_name': (state_attr(state.entity_id, 'friendly_name') or state.name or 'unknown'),
           'state': state.state
         }] %}
       {% endif %}
@@ -94,11 +94,11 @@ variables:
         {% if add_entity %}
           {% set entities.data = entities.data + [{
             'entity_id': state.entity_id,
-            'device_id': device_id(state.entity_id) or 'no_device_id',
-            'device_name': device_attr(state.entity_id, 'name') or '',
-            'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name') or '',
-            'area_id': area_id(state.entity_id) or '',
-            'entity_name': state_attr(state.entity_id, 'friendly_name') or state.name or '',
+            'device_id': (device_id(state.entity_id) or 'no_device'),
+            'device_name': (device_attr(state.entity_id, 'name') or 'no_device'),
+            'friendly_name': (device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name') or state_attr(state.entity_id, 'friendly_name') or 'unknown'),
+            'area_id': (area_id(state.entity_id) or 'no_area'),
+            'entity_name': (state_attr(state.entity_id, 'friendly_name') or state.name or 'unknown'),
             'state': 'low battery'
           }] %}
         {% endif %}
@@ -117,11 +117,11 @@ variables:
           {% if add_entity %}
             {% set entities.data = entities.data + [{
               'entity_id': state.entity_id,
-              'device_id': device_id(state.entity_id) or 'no_device_id',
-              'device_name': device_attr(state.entity_id, 'name') or '',
-              'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name') or '',
-              'area_id': area_id(state.entity_id) or '',
-              'entity_name': state_attr(state.entity_id, 'friendly_name') or state.name or '',
+              'device_id': (device_id(state.entity_id) or 'no_device'),
+              'device_name': (device_attr(state.entity_id, 'name') or 'no_device'),
+              'friendly_name': (device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name') or state_attr(state.entity_id, 'friendly_name') or 'unknown'),
+              'area_id': (area_id(state.entity_id) or 'no_area'),
+              'entity_name': (state_attr(state.entity_id, 'friendly_name') or state.name or 'unknown'),
               'state': 'low battery'
             }] %}
           {% endif %}
@@ -140,8 +140,8 @@ condition:
     value_template: "{{ (now().hour | int) % (trigger_interval_hours | int) == 0 }}"
 
 action:
-  - service: notify.ginnie_cloud
+  - service: rest_command.send_device_status
     data:
-      message: "{{ 'devices:' ~ (items | to_json) }}"
+      payload: "{{ {'items': items} | to_json }}"
 
 mode: single
