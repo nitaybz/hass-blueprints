@@ -42,7 +42,7 @@ blueprint:
         target:
     actions:
       name: Actions
-      description: Actions to run, such as notifications. Matched devices are returned with the <code>{{ items }}</code> dictionary.
+      description: Actions to run, such as notifications. Matched devices are returned with the <code>{{ items }}</code> list.
       selector:
         action:
 variables:
@@ -50,10 +50,10 @@ variables:
   check_unknown: !input check_unknown
   battery_warning_level: !input battery_warning_level
   exclude: !input exclude
-  non_critical_entities: ['update', 'firmware', 'sensor.update', 'sensor.firmware'] 
+  non_critical_entities: ['update', 'firmware', 'sensor.update', 'sensor.firmware']
   ignore_unknown_entities: ['button', 'select']
   items: >
-    {% set devices = namespace(data={}) %}
+    {% set entities = [] %}
 
     {# Function to safely get area name #}
     {% macro get_area(entity_id) %}
@@ -79,23 +79,15 @@ variables:
       {% endif %}
 
       {% if add_entity %}
-        {% set device_id = device_id(state.entity_id) or 'no_device_id' %}
-        {% set entity_info = {
+        {% set entities = entities + [{
           'entity_id': state.entity_id,
+          'device_id': device_id(state.entity_id) or 'no_device_id',
+          'device_name': device_attr(state.entity_id, 'name'),
+          'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name'),
+          'area_id': area_id(state.entity_id),
           'entity_name': state_attr(state.entity_id, 'friendly_name') or state.name,
           'state': state.state
-        } %}
-        {% if device_id not in devices.data %}
-          {% set device_info = {
-            'device_name': device_attr(state.entity_id, 'name'),
-            'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name'),
-            'area_id': area_id(state.entity_id),
-            'affected_entities': [entity_info]
-          } %}
-          {% set devices.data[device_id] = device_info %}
-        {% else %}
-          {% set devices.data[device_id]['affected_entities'] = devices.data[device_id]['affected_entities'] + [entity_info] %}
-        {% endif %}
+        }] %}
       {% endif %}
     {% endfor %}
 
@@ -116,29 +108,22 @@ variables:
         {% endif %}
 
         {% if add_entity %}
-          {% set device_id = device_id(state.entity_id) or 'no_device_id' %}
-          {% set entity_info = {
+          {% set entities = entities + [{
             'entity_id': state.entity_id,
+            'device_id': device_id(state.entity_id) or 'no_device_id',
+            'device_name': device_attr(state.entity_id, 'name'),
+            'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name'),
+            'area_id': area_id(state.entity_id),
             'entity_name': state_attr(state.entity_id, 'friendly_name') or state.name,
             'state': 'low battery'
-          } %}
-          {% if device_id not in devices.data %}
-            {% set device_info = {
-              'device_name': device_attr(state.entity_id, 'name'),
-              'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name'),
-              'area_id': area_id(state.entity_id),
-              'affected_entities': [entity_info]
-            } %}
-            {% set devices.data[device_id] = device_info %}
-          {% else %}
-            {% set devices.data[device_id]['affected_entities'] = devices.data[device_id]['affected_entities'] + [entity_info] %}
-          {% endif %}
+          }] %}
         {% endif %}
       {% endfor %}
 
       {# Sensors with device_class 'battery' and low battery level #}
       {% for state in states.sensor | selectattr('attributes.device_class', 'equalto', 'battery') %}
-        {% if state.state | float(-1) < battery_warning_level | float(0) %}
+        {% set battery_level = state.state | float(default=-1) %}
+        {% if battery_level >= 0 and battery_level < battery_warning_level %}
           {% set add_entity = true %}
           {% set area = get_area(state.entity_id) %}
           {% if area == '' or area.startswith('_') %}
@@ -152,29 +137,21 @@ variables:
           {% endif %}
 
           {% if add_entity %}
-            {% set device_id = device_id(state.entity_id) or 'no_device_id' %}
-            {% set entity_info = {
+            {% set entities = entities + [{
               'entity_id': state.entity_id,
+              'device_id': device_id(state.entity_id) or 'no_device_id',
+              'device_name': device_attr(state.entity_id, 'name'),
+              'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name'),
+              'area_id': area_id(state.entity_id),
               'entity_name': state_attr(state.entity_id, 'friendly_name') or state.name,
               'state': 'low battery'
-            } %}
-            {% if device_id not in devices.data %}
-              {% set device_info = {
-                'device_name': device_attr(state.entity_id, 'name'),
-                'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name'),
-                'area_id': area_id(state.entity_id),
-                'affected_entities': [entity_info]
-              } %}
-              {% set devices.data[device_id] = device_info %}
-            {% else %}
-              {% set devices.data[device_id]['affected_entities'] = devices.data[device_id]['affected_entities'] + [entity_info] %}
-            {% endif %}
+            }] %}
           {% endif %}
         {% endif %}
       {% endfor %}
     {% endif %}
 
-    {{ devices.data.values() | list | tojson }}
+    {{ entities | tojson }}
 trigger:
   - platform: time_pattern
     minutes: "0"
