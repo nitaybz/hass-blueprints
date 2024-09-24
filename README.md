@@ -1,2 +1,1 @@
-# hass-blueprints
-# hass-blueprints
+# hass-warning-sync

@@ -1,13 +1,15 @@
 blueprint:
-  name: Device Availability and Battery Hourly Checker
-  description: |
+  name: Device Availability and Battery Checker
+  description: >
     Checks all entities/devices for availability (unavailable and optionally unknown states), and all entities/devices
     with the 'battery' device_class for battery level.
 
     Devices/entities that are not assigned to an area, 
     or are assigned to areas where the name begins with an underscore (_), 
-    or are explicitly excluded, will not be monitored.
-    To monitor devices that are not fixed to a specific area, simply create a pseudo-area, such as "Roaming" or "Nowhere" and add the devices to that area.
+    will not be monitored.
+
+    The automation runs every X hours (default is 1 hour).
+
   domain: automation
   input:
     check_battery:
@@ -17,8 +19,8 @@ blueprint:
       selector:
         boolean:
     battery_warning_level:
-      name: Battery warning level
-      description: Devices with battery level below the configured value are assumed to be low-battery (as well as binary battery sensors with value 'on').
+      name: Battery Warning Level
+      description: Devices with battery level below the configured value are considered low battery.
       default: 20
       selector:
         number:
@@ -33,70 +35,35 @@ blueprint:
       default: false
       selector:
         boolean:
-    exclude:
-      name: Exclusions
-      description: Areas/devices/entities to exclude from monitoring.
-      default: []
+    trigger_interval_hours:
+      name: Trigger Interval (hours)
+      description: Run the automation every X hours.
+      default: 1
       selector:
-        target:
-    actions:
-      name: Actions
-      description: Actions to run, such as notifications. Matched devices are returned with the `{{ items }}` list.
-      selector:
-        action:
-variables:
-  check_battery: !input check_battery
-  check_unknown: !input check_unknown
-  battery_warning_level: !input battery_warning_level
-  exclude: !input exclude
-  non_critical_entities: ['update', 'firmware', 'sensor.update', 'sensor.firmware']
-  ignore_unknown_entities: ['button', 'select']
-  items: >
-    {% set entities = [] %}
+        number:
+          min: 1
+          max: 24
+          unit_of_measurement: "hours"
+          mode: slider
+          step: 1
+  variables:
+    check_battery: !input check_battery
+    check_unknown: !input check_unknown
+    battery_warning_level: !input battery_warning_level
+    trigger_interval_hours: !input trigger_interval_hours
+    non_critical_entities: ['update', 'firmware', 'sensor.update', 'sensor.firmware']
+    ignore_unknown_entities: ['button', 'select']
+    items: >
+      {% set entities = [] %}
 
-    {# Process entities that are unavailable or unknown (if enabled) #}
-    {% for state in states if state.state == 'unavailable' or (check_unknown and state.state == 'unknown') %}
-      {% set add_entity = true %}
-      {% set area = area_name(state.entity_id) or '' %}
-      {% if area.startswith('_') %}
-        {% set add_entity = false %}
-      {% endif %}
-      {% if exclude.entity_id is defined and state.entity_id in exclude.entity_id %}
-        {% set add_entity = false %}
-      {% endif %}
-      {% if exclude.area_id is defined and area_id(state.entity_id) in exclude.area_id %}
-        {% set add_entity = false %}
-      {% endif %}
-      {% if state.entity_id.split('.')[0] in non_critical_entities or (state.state == 'unknown' and state.entity_id.split('.')[0] in ignore_unknown_entities) %}
-        {% set add_entity = false %}
-      {% endif %}
-
-      {% if add_entity %}
-        {% set entities = entities + [{
-          'entity_id': state.entity_id,
-          'device_id': device_id(state.entity_id) or 'no_device_id',
-          'device_name': device_attr(state.entity_id, 'name') or '',
-          'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name') or '',
-          'area_id': area_id(state.entity_id) or '',
-          'entity_name': state_attr(state.entity_id, 'friendly_name') or state.name or '',
-          'state': state.state
-        }] %}
-      {% endif %}
-    {% endfor %}
-
-    {# Check battery levels if enabled #}
-    {% if check_battery %}
-      {# Binary sensors with device_class 'battery' and state 'on' #}
-      {% for state in states.binary_sensor | selectattr('attributes.device_class', 'equalto', 'battery') | selectattr('state', 'equalto', 'on') %}
+      {# Process entities that are unavailable or unknown (if enabled) #}
+      {% for state in states if state.state == 'unavailable' or (check_unknown and state.state == 'unknown') %}
         {% set add_entity = true %}
         {% set area = area_name(state.entity_id) or '' %}
         {% if area.startswith('_') %}
           {% set add_entity = false %}
         {% endif %}
-        {% if exclude.entity_id is defined and state.entity_id in exclude.entity_id %}
-          {% set add_entity = false %}
-        {% endif %}
-        {% if exclude.area_id is defined and area_id(state.entity_id) in exclude.area_id %}
+        {% if state.entity_id.split('.')[0] in non_critical_entities or (state.state == 'unknown' and state.entity_id.split('.')[0] in ignore_unknown_entities) %}
           {% set add_entity = false %}
         {% endif %}
 
@@ -108,24 +75,18 @@ variables:
             'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name') or '',
             'area_id': area_id(state.entity_id) or '',
             'entity_name': state_attr(state.entity_id, 'friendly_name') or state.name or '',
-            'state': 'low battery'
+            'state': state.state
           }] %}
         {% endif %}
       {% endfor %}
 
-      {# Sensors with device_class 'battery' and low battery level #}
-      {% for state in states.sensor | selectattr('attributes.device_class', 'equalto', 'battery') %}
-        {% set battery_level = state.state | float(default=-1) %}
-        {% if battery_level >= 0 and battery_level < battery_warning_level %}
+      {# Check battery levels if enabled #}
+      {% if check_battery %}
+        {# Binary sensors with device_class 'battery' and state 'on' #}
+        {% for state in states.binary_sensor | selectattr('attributes.device_class', 'equalto', 'battery') | selectattr('state', 'equalto', 'on') %}
           {% set add_entity = true %}
           {% set area = area_name(state.entity_id) or '' %}
           {% if area.startswith('_') %}
-            {% set add_entity = false %}
-          {% endif %}
-          {% if exclude.entity_id is defined and state.entity_id in exclude.entity_id %}
-            {% set add_entity = false %}
-          {% endif %}
-          {% if exclude.area_id is defined and area_id(state.entity_id) in exclude.area_id %}
             {% set add_entity = false %}
           {% endif %}
 
@@ -140,16 +101,44 @@ variables:
               'state': 'low battery'
             }] %}
           {% endif %}
-        {% endif %}
-      {% endfor %}
-    {% endif %}
+        {% endfor %}
 
-    {{ entities }}
-trigger:
-  - platform: time_pattern
-    minutes: "0"
-condition: []
-action:
-  - choose: []
-    default: !input actions
-mode: single
+        {# Sensors with device_class 'battery' and low battery level #}
+        {% for state in states.sensor | selectattr('attributes.device_class', 'equalto', 'battery') %}
+          {% set battery_level = state.state | float(default=-1) %}
+          {% if battery_level >= 0 and battery_level < battery_warning_level %}
+            {% set add_entity = true %}
+            {% set area = area_name(state.entity_id) or '' %}
+            {% if area.startswith('_') %}
+              {% set add_entity = false %}
+            {% endif %}
+
+            {% if add_entity %}
+              {% set entities = entities + [{
+                'entity_id': state.entity_id,
+                'device_id': device_id(state.entity_id) or 'no_device_id',
+                'device_name': device_attr(state.entity_id, 'name') or '',
+                'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name') or '',
+                'area_id': area_id(state.entity_id) or '',
+                'entity_name': state_attr(state.entity_id, 'friendly_name') or state.name or '',
+                'state': 'low battery'
+              }] %}
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+
+      {{ entities }}
+  trigger:
+    - platform: time_pattern
+      hours: "/{{ trigger_interval_hours }}"
+      minutes: 0
+  action:
+    - service: http.request
+      data:
+        url: "http://10.0.0.23:4000/webhooks/hass"
+        method: POST
+        headers:
+          Content-Type: application/json
+        payload: "{{ {'items': items} | tojson }}"
+  mode: single
