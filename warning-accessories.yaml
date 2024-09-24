@@ -144,7 +144,7 @@ variables:
       {% endfor %}
     {% endif %}
 
-    {{ entities | tojson }}
+    {{ entities }}
 trigger:
   - platform: time_pattern
     minutes: "0"
