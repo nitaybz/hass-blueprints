@@ -55,7 +55,7 @@ variables:
   non_critical_entities: ['update', 'firmware', 'sensor.update', 'sensor.firmware']
   ignore_unknown_entities: ['button', 'select']
   items: >
-    {% set entities = [] %}
+    {% set entities = namespace(data=[]) %}
 
     {# Process entities that are unavailable or unknown (if enabled) #}
     {% for state in states if state.state == 'unavailable' or (check_unknown and state.state == 'unknown') %}
@@ -69,7 +69,7 @@ variables:
       {% endif %}
 
       {% if add_entity %}
-        {% set entities = entities + [{
+        {% set entities.data = entities.data + [{
           'entity_id': state.entity_id,
           'device_id': device_id(state.entity_id) or 'no_device_id',
           'device_name': device_attr(state.entity_id, 'name') or '',
@@ -92,7 +92,7 @@ variables:
         {% endif %}
 
         {% if add_entity %}
-          {% set entities = entities + [{
+          {% set entities.data = entities.data + [{
             'entity_id': state.entity_id,
             'device_id': device_id(state.entity_id) or 'no_device_id',
             'device_name': device_attr(state.entity_id, 'name') or '',
@@ -115,7 +115,7 @@ variables:
           {% endif %}
 
           {% if add_entity %}
-            {% set entities = entities + [{
+            {% set entities.data = entities.data + [{
               'entity_id': state.entity_id,
               'device_id': device_id(state.entity_id) or 'no_device_id',
               'device_name': device_attr(state.entity_id, 'name') or '',
@@ -129,7 +129,7 @@ variables:
       {% endfor %}
     {% endif %}
 
-    {{ entities }}
+    {{ entities.data }}
 
 trigger:
   - platform: time_pattern
@@ -140,8 +140,8 @@ condition:
     value_template: "{{ (now().hour | int) % (trigger_interval_hours | int) == 0 }}"
 
 action:
-  - service: rest_command.send_device_status
+  - service: notify.ginnie_cloud
     data:
-      payload: "{{ {'items': items} | tojson }}"
+      message: "{{ {'items': items} | tojson }}"
 
 mode: single
