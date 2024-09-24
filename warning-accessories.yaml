@@ -4,8 +4,8 @@ blueprint:
     Checks all entities/devices for availability (unavailable and optionally unknown states), and all entities/devices
     with the 'battery' device_class for battery level.
 
-    Devices/entities that are not assigned to an area, 
-    or are assigned to areas where the name begins with an underscore (_), 
+    Devices/entities that are not assigned to an area,
+    or are assigned to areas where the name begins with an underscore (_),
     will not be monitored.
 
     The automation runs every X hours (default is 1 hour).
@@ -133,8 +133,11 @@ variables:
 
 trigger:
   - platform: time_pattern
-    hours: "/{{ trigger_interval_hours }}"
     minutes: 0
+
+condition:
+  - condition: template
+    value_template: "{{ (now().hour | int) % (trigger_interval_hours | int) == 0 }}"
 
 action:
   - service: http.request
