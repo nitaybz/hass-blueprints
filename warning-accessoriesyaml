@@ -1,0 +1,207 @@
+blueprint:
+  name: Device Availability and Battery Checker
+  description: |2
+    Checks all entities/devices for availability (unavailable and unknown states), and all entities/devices
+    with the 'battery' device_class for battery level.
+
+    Devices/entities that are not assigned to an area, 
+    or are assigned to areas where the name begins with an underscore (_), 
+    or are explicitly excluded, will not be monitored.
+    To monitor devices that are not fixed to a specific area, simply create a pseudo-area, such as "Roaming" or "Nowhere" and add the devices to that area.
+  domain: automation
+  source_url: https://raw.githubusercontent.com/briped/homeassistant/master/blueprints/device_availability_checker.yaml
+  input:
+    check_battery:
+      name: Check Battery Levels?
+      description: Enable to monitor devices with battery level below the configured value.
+      default: true
+      selector:
+        boolean:
+    battery_warning_level:
+      name: Battery warning level
+      description: Devices with battery level below the configured value are assumed to be low-battery (as well as binary battery sensors with value 'on').
+      default: 20
+      selector:
+        number:
+          min: 5.0
+          max: 100.0
+          unit_of_measurement: "%"
+          mode: slider
+          step: 5.0
+    trigger_interval:
+      name: Interval between checks
+      description: Time interval in hours to run the check (e.g., 1 means every hour, 2 means every two hours, etc.)
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 24
+          unit_of_measurement: "hours"
+          mode: slider
+          step: 1.0
+    exclude:
+      name: Exclusions
+      description: Areas/devices/entities to exclude from monitoring.
+      default: []
+      selector:
+        target:
+    actions:
+      name: Actions
+      description: Actions to run, such as notifications. Matched devices are returned with the <code>{{items}}</code> dictionary.
+      selector:
+        action:
+variables:
+  check_battery: !input check_battery
+  battery_warning_level: !input battery_warning_level
+  exclude: !input exclude
+  items: >
+    {% set entities = namespace(data=[]) %}
+    {% set devices = namespace(data=[]) %}
+
+    {# Loop through all entities with state == unavailable or unknown. #}
+    {% for state in states | selectattr('state', 'in', ['unavailable', 'unknown']) %}
+      {% set add_entity = true %}
+      {% if area_id(state.entity_id) == None
+        or area_name(state.entity_id)[0:1] == '_' %}
+        {% set add_entity = false %}
+      {% endif %}
+      {% if exclude is defined %}
+        {% if exclude.entity_id is defined 
+          and state.entity_id in exclude.entity_id %}
+          {% set add_entity = false %}
+        {% endif %}
+        {% if exclude.area_id is defined 
+          and area_id(state.entity_id) in exclude.area_id %}
+          {% set add_entity = false %}
+        {% endif %}
+      {% endif %}
+
+      {% if add_entity == true %}
+        {# Add found entities to array. #}
+        {% set entities.data = entities.data 
+          + [{'entity_id': state.entity_id, 
+              'device_id': device_id(state.entity_id), 
+              'area_id': area_id(state.entity_id), 
+              'state': state.state}] %}
+      {% endif %}
+    {% endfor %}
+
+    {% if check_battery %}
+      {# Loop through all binary_sensor entities with the 'battery' device_class. #}
+      {% for state in states.binary_sensor 
+        | rejectattr('attributes.device_class', 'undefined') 
+        | selectattr('attributes.device_class', 'eq', 'battery') 
+        | selectattr('state', 'eq', 'on') %}
+        {% set add_entity = true %}
+        {% if area_id(state.entity_id) == None
+          or area_name(state.entity_id)[0:1] == '_' %}
+          {% set add_entity = false %}
+        {% endif %}
+        {% if exclude is defined %}
+          {% if exclude.entity_id is defined 
+            and state.entity_id in exclude.entity_id %}
+            {% set add_entity = false %}
+          {% endif %}
+          {% if exclude.area_id is defined 
+            and area_id(state.entity_id) in exclude.area_id %}
+            {% set add_entity = false %}
+          {% endif %}
+        {% endif %}
+
+        {% if add_entity == true %}
+          {# Add found entities to array. #}
+          {% set entities.data = entities.data 
+            + [{'entity_id': state.entity_id, 
+                'device_id': device_id(state.entity_id), 
+                'area_id': area_id(state.entity_id), 
+                'state': state.state}] %}
+        {% endif %}
+      {% endfor %}
+
+      {# Loop through all sensor entities with the 'battery' device_class. #}
+      {% for state in states.sensor
+        | rejectattr('state', 'eq', 'unavailable') 
+        | rejectattr('attributes.device_class', 'undefined') 
+        | selectattr('attributes.device_class', 'eq', 'battery') %}
+        {% set add_entity = true %}
+        {% if area_id(state.entity_id) == None
+          or area_name(state.entity_id)[0:1] == '_' %}
+          {% set add_entity = false %}
+        {% endif %}
+        {% if exclude is defined %}
+          {% if exclude.entity_id is defined 
+            and state.entity_id in exclude.entity_id %}
+            {% set add_entity = false %}
+          {% endif %}
+          {% if exclude.area_id is defined 
+            and area_id(state.entity_id) in exclude.area_id %}
+            {% set add_entity = false %}
+          {% endif %}
+        {% endif %}
+        {% if (state.state | int(-1)) >= (battery_warning_level | int(0)) %}
+          {% set add_entity = false %}
+        {% endif %}
+
+        {% if add_entity == true %}
+          {# Add found entities to array. #}
+          {% set entities.data = entities.data + 
+            [{'entity_id': state.entity_id, 
+              'device_id': device_id(state.entity_id), 
+              'area_id': area_id(state.entity_id), 
+              'state': state.state}] %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+
+    {# Loop through all unique devices from the entities array. #}
+    {% for entity in entities.data 
+      | unique(attribute='device_id') %}
+      {% set add_entity = true %}
+      {% if area_id(entity.device_id) == None 
+        or area_name(entity.device_id)[0:1] == '_' %}
+        {% set add_entity = false %}
+      {% endif %}
+      {% if exclude is defined %}
+        {% if exclude.device_id is defined 
+          and entity.device_id in exclude.device_id %}
+          {% set add_entity = false %}
+        {% endif %}
+        {% if exclude.area_id is defined 
+          and area_id(entity.device_id) in exclude.area_id %}
+          {% set add_entity = false %}
+        {% endif %}
+      {% endif %}
+      {% if check_battery is defined
+        and (entity.state | int(-1)) >= (battery_warning_level | int(0)) %}
+        {% set add_entity = false %}
+      {% endif %}
+
+      {% if add_entity == true %}
+        {# Set default friendly_name. #}
+        {% set device_friendly_name = device_attr(entity.device_id, 'name') %}
+        {% if state_attr(entity.entity_id, 'friendly_name') %}
+          {# Set to entity friendly_name. #}
+          {% set device_friendly_name = state_attr(entity.entity_id, 'friendly_name') %}
+        {% endif %}
+        {% if device_attr(entity.device_id, 'name_by_user') %}
+          {# Set to user given friendly_name. #}
+          {% set device_friendly_name = device_attr(entity.device_id, 'name_by_user') %}
+        {% endif %}
+        {# Add device to array. #}
+        {% set devices.data = devices.data 
+          + [{'device_id': entity.device_id, 
+              'device_name': device_attr(entity.entity_id, 'name'), 
+              'friendly_name': device_friendly_name, 
+              'area_id': area_id(entity.entity_id), 
+              'state': entity.state}] %}
+      {% endif %}
+    {% endfor %}
+    {{devices.data}}
+trigger:
+  - platform: time_pattern
+    hours: "/{{ trigger_interval }}"
+condition: []
+action:
+  - choose: []
+    default: !input actions
+mode: single
