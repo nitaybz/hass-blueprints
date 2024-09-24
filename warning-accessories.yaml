@@ -43,6 +43,8 @@ variables:
   check_battery: !input check_battery
   battery_warning_level: !input battery_warning_level
   exclude: !input exclude
+  # Add non-critical entities list
+  non_critical_entities: ['update', 'firmware', 'sensor.update', 'sensor.firmware'] 
   items: >
     {% set entities = namespace(data=[]) %}
     {% set devices = namespace(data=[]) %}
@@ -64,6 +66,10 @@ variables:
           {% set add_entity = false %}
         {% endif %}
       {% endif %}
+      {# Exclude non-critical entities #}
+      {% if state.entity_id.split('.')[0] in non_critical_entities %}
+        {% set add_entity = false %}
+      {% endif %}
 
       {% if add_entity == true %}
         {# Add found entities to array. #}
@@ -71,7 +77,9 @@ variables:
           + [{'entity_id': state.entity_id, 
               'device_id': device_id(state.entity_id), 
               'area_id': area_id(state.entity_id), 
-              'state': state.state}] %}
+              'state': state.state,
+              'entity_name': state.name if state_attr(state.entity_id, 'friendly_name') is none else state_attr(state.entity_id, 'friendly_name')
+             }] %}
       {% endif %}
     {% endfor %}
 
@@ -103,7 +111,9 @@ variables:
             + [{'entity_id': state.entity_id, 
                 'device_id': device_id(state.entity_id), 
                 'area_id': area_id(state.entity_id), 
-                'state': state.state}] %}
+                'state': 'low battery',
+                'entity_name': state.name if state_attr(state.entity_id, 'friendly_name') is none else state_attr(state.entity_id, 'friendly_name')
+               }] %}
         {% endif %}
       {% endfor %}
 
@@ -137,7 +147,9 @@ variables:
             [{'entity_id': state.entity_id, 
               'device_id': device_id(state.entity_id), 
               'area_id': area_id(state.entity_id), 
-              'state': state.state}] %}
+              'state': 'low battery',
+              'entity_name': state.name if state_attr(state.entity_id, 'friendly_name') is none else state_attr(state.entity_id, 'friendly_name')
+             }] %}
         {% endif %}
       {% endfor %}
     {% endif %}
@@ -182,7 +194,9 @@ variables:
               'device_name': device_attr(entity.entity_id, 'name'), 
               'friendly_name': device_friendly_name, 
               'area_id': area_id(entity.entity_id), 
-              'state': entity.state}] %}
+              'state': entity.state,
+              'entity_name': state.entity_id # Include entity ID in the output
+             }] %}
       {% endif %}
     {% endfor %}
     {{devices.data}}
