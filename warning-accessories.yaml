@@ -142,6 +142,6 @@ condition:
 action:
   - service: notify.ginnie_cloud
     data:
-      message: "{{ {'items': items} | tojson }}"
+      message: "{{ {'items': items} | to_json }}"
 
 mode: single
