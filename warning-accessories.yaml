@@ -200,7 +200,7 @@ variables:
     {{devices.data}}
 trigger:
   - platform: time_pattern
-    hours: "/{{ trigger_interval }}"
+    hours: "{{ trigger_interval }}"
 condition: []
 action:
   - choose: []
