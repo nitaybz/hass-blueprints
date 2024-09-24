@@ -1,6 +1,6 @@
 blueprint:
-  name: Device Availability and Battery Checker
-  description: |2
+  name: Device Availability and Battery Hourly Checker
+  description: |
     Checks all entities/devices for availability (unavailable and unknown states), and all entities/devices
     with the 'battery' device_class for battery level.
 
@@ -28,17 +28,6 @@ blueprint:
           unit_of_measurement: "%"
           mode: slider
           step: 5.0
-    trigger_interval:
-      name: Interval between checks
-      description: Time interval in hours to run the check (e.g., 1 means every hour, 2 means every two hours, etc.)
-      default: 1
-      selector:
-        number:
-          min: 1
-          max: 24
-          unit_of_measurement: "hours"
-          mode: slider
-          step: 1.0
     exclude:
       name: Exclusions
       description: Areas/devices/entities to exclude from monitoring.
@@ -51,7 +40,6 @@ blueprint:
       selector:
         action:
 variables:
-  trigger_interval: !input trigger_interval
   check_battery: !input check_battery
   battery_warning_level: !input battery_warning_level
   exclude: !input exclude
@@ -200,7 +188,7 @@ variables:
     {{devices.data}}
 trigger:
   - platform: time_pattern
-    hours: "{{ trigger_interval }}"
+    minutes: "0"
 condition: []
 action:
   - choose: []
