@@ -46,24 +46,48 @@ blueprint:
           unit_of_measurement: "hours"
           mode: slider
           step: 1
-  variables:
-    check_battery: !input check_battery
-    check_unknown: !input check_unknown
-    battery_warning_level: !input battery_warning_level
-    trigger_interval_hours: !input trigger_interval_hours
-    non_critical_entities: ['update', 'firmware', 'sensor.update', 'sensor.firmware']
-    ignore_unknown_entities: ['button', 'select']
-    items: >
-      {% set entities = [] %}
 
-      {# Process entities that are unavailable or unknown (if enabled) #}
-      {% for state in states if state.state == 'unavailable' or (check_unknown and state.state == 'unknown') %}
+variables:
+  check_battery: !input check_battery
+  check_unknown: !input check_unknown
+  battery_warning_level: !input battery_warning_level
+  trigger_interval_hours: !input trigger_interval_hours
+  non_critical_entities: ['update', 'firmware', 'sensor.update', 'sensor.firmware']
+  ignore_unknown_entities: ['button', 'select']
+  items: >
+    {% set entities = [] %}
+
+    {# Process entities that are unavailable or unknown (if enabled) #}
+    {% for state in states if state.state == 'unavailable' or (check_unknown and state.state == 'unknown') %}
+      {% set add_entity = true %}
+      {% set area = area_name(state.entity_id) or '' %}
+      {% if area.startswith('_') %}
+        {% set add_entity = false %}
+      {% endif %}
+      {% if state.entity_id.split('.')[0] in non_critical_entities or (state.state == 'unknown' and state.entity_id.split('.')[0] in ignore_unknown_entities) %}
+        {% set add_entity = false %}
+      {% endif %}
+
+      {% if add_entity %}
+        {% set entities = entities + [{
+          'entity_id': state.entity_id,
+          'device_id': device_id(state.entity_id) or 'no_device_id',
+          'device_name': device_attr(state.entity_id, 'name') or '',
+          'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name') or '',
+          'area_id': area_id(state.entity_id) or '',
+          'entity_name': state_attr(state.entity_id, 'friendly_name') or state.name or '',
+          'state': state.state
+        }] %}
+      {% endif %}
+    {% endfor %}
+
+    {# Check battery levels if enabled #}
+    {% if check_battery %}
+      {# Binary sensors with device_class 'battery' and state 'on' #}
+      {% for state in states.binary_sensor | selectattr('attributes.device_class', 'equalto', 'battery') | selectattr('state', 'equalto', 'on') %}
         {% set add_entity = true %}
         {% set area = area_name(state.entity_id) or '' %}
         {% if area.startswith('_') %}
-          {% set add_entity = false %}
-        {% endif %}
-        {% if state.entity_id.split('.')[0] in non_critical_entities or (state.state == 'unknown' and state.entity_id.split('.')[0] in ignore_unknown_entities) %}
           {% set add_entity = false %}
         {% endif %}
 
@@ -75,15 +99,15 @@ blueprint:
             'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name') or '',
             'area_id': area_id(state.entity_id) or '',
             'entity_name': state_attr(state.entity_id, 'friendly_name') or state.name or '',
-            'state': state.state
+            'state': 'low battery'
           }] %}
         {% endif %}
       {% endfor %}
 
-      {# Check battery levels if enabled #}
-      {% if check_battery %}
-        {# Binary sensors with device_class 'battery' and state 'on' #}
-        {% for state in states.binary_sensor | selectattr('attributes.device_class', 'equalto', 'battery') | selectattr('state', 'equalto', 'on') %}
+      {# Sensors with device_class 'battery' and low battery level #}
+      {% for state in states.sensor | selectattr('attributes.device_class', 'equalto', 'battery') %}
+        {% set battery_level = state.state | float(default=-1) %}
+        {% if battery_level >= 0 and battery_level < battery_warning_level %}
           {% set add_entity = true %}
           {% set area = area_name(state.entity_id) or '' %}
           {% if area.startswith('_') %}
@@ -101,44 +125,24 @@ blueprint:
               'state': 'low battery'
             }] %}
           {% endif %}
-        {% endfor %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
 
-        {# Sensors with device_class 'battery' and low battery level #}
-        {% for state in states.sensor | selectattr('attributes.device_class', 'equalto', 'battery') %}
-          {% set battery_level = state.state | float(default=-1) %}
-          {% if battery_level >= 0 and battery_level < battery_warning_level %}
-            {% set add_entity = true %}
-            {% set area = area_name(state.entity_id) or '' %}
-            {% if area.startswith('_') %}
-              {% set add_entity = false %}
-            {% endif %}
+    {{ entities }}
 
-            {% if add_entity %}
-              {% set entities = entities + [{
-                'entity_id': state.entity_id,
-                'device_id': device_id(state.entity_id) or 'no_device_id',
-                'device_name': device_attr(state.entity_id, 'name') or '',
-                'friendly_name': device_attr(state.entity_id, 'name_by_user') or device_attr(state.entity_id, 'name') or '',
-                'area_id': area_id(state.entity_id) or '',
-                'entity_name': state_attr(state.entity_id, 'friendly_name') or state.name or '',
-                'state': 'low battery'
-              }] %}
-            {% endif %}
-          {% endif %}
-        {% endfor %}
-      {% endif %}
+trigger:
+  - platform: time_pattern
+    hours: "/{{ trigger_interval_hours }}"
+    minutes: 0
 
-      {{ entities }}
-  trigger:
-    - platform: time_pattern
-      hours: "/{{ trigger_interval_hours }}"
-      minutes: 0
-  action:
-    - service: http.request
-      data:
-        url: "http://10.0.0.23:4000/webhooks/hass"
-        method: POST
-        headers:
-          Content-Type: application/json
-        payload: "{{ {'items': items} | tojson }}"
-  mode: single
+action:
+  - service: http.request
+    data:
+      url: "http://10.0.0.23:4000/webhooks/hass"  # Replace with your server endpoint
+      method: POST
+      headers:
+        Content-Type: application/json
+      payload: "{{ {'items': items} | tojson }}"
+
+mode: single
